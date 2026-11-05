@@ -1,61 +1,60 @@
 # Claix MCP Server
 
-> Turn documents into structured, source-cited knowledge for AI agents.
+> The hosted MCP server for Claix, the security layer between your SQL database and AI agents.
 
-Claix is a hosted Model Context Protocol (MCP) server that gives Claude, Cursor, Claude Code, Windsurf, n8n, Make and custom agents secure access to documents, extracted data and persistent knowledge.
+Connect Cursor, Claude, Windsurf, n8n, Make, or any MCP client to Claix. The server exposes **32 tools** (v1.13.0). Retrieve tools ask your live database through the routes and agents you defined. The rest turn documents into structured JSON or Markdown.
 
-Instead of building custom document pipelines, connect your agent to Claix and use 23 tools for extraction, document analysis, persistent context and Knowledge Spaces.
+Guard, the check on `INSERT`, `UPDATE`, and `DELETE`, is `POST /check-sql` on the HTTP API. It is not one of these MCP tools. Docs: [claix.dev/documentation/check-sql](https://claix.dev/documentation/check-sql).
 
 - **Endpoint:** https://claix.dev/mcp
 - **Transport:** Streamable HTTP and legacy SSE
-- **MCP version:** 1.11.0
-- **Tools:** 23
+- **MCP version:** 1.13.0
+- **Tools:** 32
 - **Docs:** https://claix.dev/documentation/mcp
+- **Server card:** https://claix.dev/.well-known/mcp/server-card.json
 - **Smithery:** https://smithery.ai/server/info-f4xz/claix
 
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-MCP-7C3AED?style=flat-square)](https://modelcontextprotocol.io/)
-[![Claix](https://img.shields.io/badge/Claix-Document%20Intelligence-00C853?style=flat-square)](https://claix.dev)
-[![Tools](https://img.shields.io/badge/Tools-23-00C853?style=flat-square)](https://claix.dev/documentation/mcp)
+[![Claix](https://img.shields.io/badge/Claix-Security%20layer-00C853?style=flat-square)](https://claix.dev)
+[![Tools](https://img.shields.io/badge/Tools-32-00C853?style=flat-square)](https://claix.dev/documentation/mcp)
 [![Smithery](https://img.shields.io/badge/Smithery-Install-111827?style=flat-square)](https://smithery.ai/server/info-f4xz/claix)
 
-## What it does
+## What you can do
 
-Claix lets an AI agent:
-
-- Extract structured JSON from PDFs, Excel/CSV, Word, text, HTML, XML and images.
-- Analyze documents with Agent Mode.
-- Persist processed documents and keep their context available.
-- Ask follow-up questions without re-uploading the file.
-- Group related documents into Knowledge Spaces.
-- Query multiple documents together.
-- Return typed results with optional source verification.
-
-Example flow:
+**Claix Retrieve.** Create routes and agents, then ask. The agent reads only the tables and columns on its routes and returns raw rows or typed answers. Supported databases: PostgreSQL, MySQL, MariaDB, and Postgres-compatible databases such as Supabase.
 
 ```text
-PDF, Excel, image or text
+claix.routes.create
         ↓
-Claix MCP Server
+claix.agents.create
         ↓
-Structured JSON + document_id
+claix.retrieve.ask
         ↓
-Persistent context and follow-up questions
+Typed answers from the live database
+```
+
+**Claix Ingest.** List or create a schema, then extract a file to JSON, convert it to Markdown, or ask up to 5 typed questions across up to 10 files. When a schema has Save Data on (`window_context`), the mapped row can be inserted into the connected database and the response can include `row_id`.
+
+```text
+claix.schemas.list
+        ↓
+claix.extract.pdf
+        ↓
+Structured JSON, and row_id when Save Data is on
 ```
 
 ## Quick start
 
-### 1. Get a Claix API key
+### 1. Get an API key
 
 Create an account at [claix.dev](https://claix.dev) and generate an API key.
-
-Claix authenticates MCP requests with:
 
 ```http
 x-api-key: YOUR_CLAIX_API_KEY
 ```
 
 > [!IMPORTANT]
-> Do not expose API keys in public repositories, screenshots, browser code or commit history.
+> Do not put API keys in public repositories, screenshots, browser code, or commit history.
 
 ### 2. Connect from Cursor
 
@@ -65,7 +64,7 @@ Open **Cursor → Settings → MCP** and add:
 {
   "mcpServers": {
     "claix": {
-      "url": "[https://claix.dev/mcp](https://claix.dev/mcp)",
+      "url": "https://claix.dev/mcp",
       "headers": {
         "x-api-key": "YOUR_CLAIX_API_KEY"
       }
@@ -74,25 +73,29 @@ Open **Cursor → Settings → MCP** and add:
 }
 ```
 
-### 3. List your schemas
+### 3. Ask a Retrieve agent
 
-Call:
+After the route and the agent exist, call `claix.retrieve.ask`:
 
-```text
-claix.schemas.list
+```json
+{
+  "agent_name": "restaurant-ops",
+  "questions": [
+    {
+      "question": "How many tables are reserved this Saturday between 20:00 and 22:00?",
+      "format": "int"
+    }
+  ]
+}
 ```
 
-This returns the schemas available in your workspace, including their `schema_id`, document type and whether Agent Mode is enabled.
+`format` is required when the agent's `response_mode` is `razonada`. It is optional when the mode is `bruto`. Formats: `string`, `int`, `boolean`, `timestamp`, `timestamptz`, `date`, `json`, `array:string`, `array:int`. Up to 5 questions per call.
+
+This is `POST /retrieve/{agent_name}`.
 
 ### 4. Extract a PDF
 
-Call:
-
-```text
-claix.extract.pdf
-```
-
-With arguments similar to:
+Call `claix.schemas.list`, then `claix.extract.pdf` with the `schema_id` and the file:
 
 ```json
 {
@@ -101,63 +104,17 @@ With arguments similar to:
 }
 ```
 
-Claix returns structured data through:
-
-```text
-structuredContent.data
-```
-
-Example:
-
-```json
-{
-  "success": true,
-  "data": {
-    "invoice_number": "INV-2026-0841",
-    "supplier_name": "Northwind Supplies",
-    "total_amount": 1284.50,
-    "currency": "EUR"
-  }
-}
-```
-
-### 5. Keep the document context
-
-If your schema has Context Window enabled, the extraction response includes a `document_id`.
-
-Use it to ask follow-up questions:
-
-```text
-claix.window_context.ask
-```
-
-Or retrieve the stored document content:
-
-```text
-claix.window_context.get
-```
-
-You can also group documents using Knowledge Spaces and query all of them together:
-
-```text
-claix.spaces.create
-claix.spaces.add_document
-claix.space_context.ask
-```
+The structured fields come back on the tool result. If Save Data is on, the response can also include `row_id`.
 
 ## Install with Smithery
-
-One-command install:
 
 ```bash
 npx -y @smithery/cli run info-f4xz/claix
 ```
 
-Manual configuration:
-
 ```json
 {
-  "mcpUrl": "[https://claix.dev/mcp](https://claix.dev/mcp)",
+  "mcpUrl": "https://claix.dev/mcp",
   "headers": {
     "x-api-key": "YOUR_CLAIX_API_KEY"
   }
@@ -176,7 +133,7 @@ Claude Desktop can connect through `mcp-remote`:
       "args": [
         "-y",
         "mcp-remote",
-        "[https://claix.dev/mcp](https://claix.dev/mcp)",
+        "https://claix.dev/mcp",
         "--header",
         "x-api-key:YOUR_CLAIX_API_KEY"
       ]
@@ -185,24 +142,24 @@ Claude Desktop can connect through `mcp-remote`:
 }
 ```
 
-## Connect with other MCP clients
+## Other MCP clients
 
-For remote MCP clients that support custom headers, use:
+Any client that can send a custom header to a remote MCP server can use:
 
 ```json
 {
-  "url": "[https://claix.dev/mcp](https://claix.dev/mcp)",
+  "url": "https://claix.dev/mcp",
   "headers": {
     "x-api-key": "YOUR_CLAIX_API_KEY"
   }
 }
 ```
 
-Compatible clients include Cursor, Claude Desktop, Claude Code, Windsurf, Cline, Continue, Zed, Lovable, Replit Agent, n8n, Make, LangChain/LangGraph and any MCP client supporting Streamable HTTP or SSE.
+That includes Cursor, Claude Desktop, Claude Code, Windsurf, Cline, Continue, Zed, n8n, Make, and LangChain or LangGraph clients that speak Streamable HTTP or SSE.
+
+Tools also accept an optional `api_key` argument when the client cannot send headers. Prefer the header.
 
 ## Authentication
-
-The recommended method is the `x-api-key` HTTP header:
 
 ```http
 POST /mcp HTTP/1.1
@@ -212,72 +169,76 @@ Accept: application/json, text/event-stream
 x-api-key: YOUR_CLAIX_API_KEY
 ```
 
-For clients that cannot send custom headers, supported tools also accept an optional `api_key` argument.
-
-## Transport modes
+## Transport
 
 | Mode | Typical use | Connection |
-|---|---|---|
-| Streamable HTTP | Cursor, Smithery, modern MCP clients, n8n, Make | `POST https://claix.dev/mcp` |
-| Legacy SSE | Claude Desktop via `mcp-remote`, legacy session clients | `GET /mcp` + `POST /mcp/message?sessionId=...` |
+| --- | --- | --- |
+| Streamable HTTP | Cursor, Smithery, n8n, Make, current MCP clients | `POST https://claix.dev/mcp` |
+| Legacy SSE | Claude Desktop via `mcp-remote`, older session clients | `GET /mcp`, then `POST /mcp/message?sessionId=...` |
 
-Both modes are available at the same base URL.
+Both modes use the same base URL.
 
-## Tool categories
+## Tools
 
 | Category | Tools | Purpose |
-|---|---|---|
-| Schemas | `claix.schemas.*` | Create, list and delete extraction schemas |
-| Extraction | `claix.extract.*` | Convert files or text into structured JSON |
-| Agent Mode | `claix.agent.*` | Flexible document analysis and agent-oriented output |
-| Document context | `claix.window_context.*` | Retrieve or query a persisted document |
-| Knowledge Spaces | `claix.spaces.*`, `claix.space_context.ask` | Group and query multiple documents |
-| Document management | `claix.document.*` | Delete or replace persisted documents |
-| Utilities | `claix.convert.json_to_excel` | Convert JSON into an Excel file |
+| --- | --- | --- |
+| Retrieve | `claix.retrieve.ask` | Ask an agent. `POST /retrieve/{agent_name}` |
+| Routes | `claix.routes.create`, `claix.routes.edit`, `claix.routes.delete` | Define which tables and columns a question may use |
+| Agents | `claix.agents.create`, `claix.agents.edit`, `claix.agents.pause` | Create the agent, edit it, or set `paused` / `active` |
+| Schemas | `claix.schemas.list`, `get`, `create`, `update`, `delete` | Extraction schemas, including Save Data (`window_context`) |
+| Extraction | `claix.extract.excel`, `pdf`, `doc`, `image`, `text`, `audio` | File or text to schema-validated JSON |
+| Agent mode | `claix.agent.excel`, `pdf`, `doc`, `image`, `text`, `audio` | The same inputs when the schema has agent mode on |
+| Markdown | `claix.markdown.excel`, `pdf`, `doc`, `image`, `text`, `audio` | File to Markdown. Optional `save=true` can return `row_id` |
+| Multi-document | `claix.multi_document.ask` | Up to 10 files and 5 typed questions. `POST /multi-document` |
+| Convert | `claix.convert.json_to_excel` | JSON to `.xlsx` |
 
-## Main workflows
+Do not invent `schema_id`, `route_id`, or `agent_id`. List or create them first.
+
+Extraction, agent mode, multi-document, and retrieve return a `log_id`.
+
+## Workflows
+
+### Ask the database
+
+```text
+claix.routes.create
+→ claix.agents.create
+→ claix.retrieve.ask
+```
+
+Or skip the first two when the agent already exists in the dashboard, and call `claix.retrieve.ask` with its slug.
 
 ### Extract a PDF
 
 ```text
 claix.schemas.list
 → claix.extract.pdf
-→ structuredContent.data
 ```
 
-### Ask questions about a document
+### Ask across several files
 
 ```text
-claix.extract.pdf
-→ document_id
-→ claix.window_context.ask
+claix.multi_document.ask
 ```
 
-### Query multiple documents
-
-```text
-claix.spaces.create
-→ claix.extract.pdf with space_id
-→ claix.space_context.ask
-```
-
-### Run Agent Mode
+### Run agent mode on a document
 
 ```text
 claix.schemas.list
-→ find schema with is_agent_mode=true
-→ claix.agent.pdf / claix.agent.excel / claix.agent.doc
+→ schema with is_agent_mode = true
+→ claix.agent.pdf
 ```
 
-## Reusable prompts
+## Prompts
 
-Claix exposes workflow prompts through `prompts/list`:
+`prompts/list` includes:
 
+- `workflow.retrieve-ask`
 - `workflow.discover-and-extract`
 - `workflow.agent-document-analysis`
 - `workflow.invoice-pdf`
-- `workflow.window-context-ask`
-- `workflow.space-context-ask`
+- `workflow.markdown-save`
+- `workflow.multi-document-ask`
 
 ## Resources
 
@@ -285,19 +246,21 @@ Claix exposes workflow prompts through `prompts/list`:
 - OpenAPI specification: `claix://docs/openapi`
 - Tool catalog: `claix://docs/tools`
 - Server card: https://claix.dev/.well-known/mcp/server-card.json
+- Product guide: https://github.com/claix-dev/claix-for-devs
 - Full documentation: https://claix.dev/documentation/mcp
 
 ## Security
 
-- Use environment variables or your client’s secure secrets storage for API keys.
-- Prefer header authentication over the per-tool `api_key` fallback.
-- `claix.document.delete` and `claix.spaces.delete` are destructive and expose `destructiveHint`.
-- Document deletion is irreversible.
+- Store the API key in the client's secret storage or in an environment variable.
+- Prefer the `x-api-key` header over the per-tool `api_key` argument.
+- `claix.schemas.delete`, `claix.routes.delete`, and pausing an agent change the account. Confirm before you call them.
+- Retrieve uses the read-only database role you connected. Guard, on `POST /check-sql`, is the check for writes, and it does not execute them.
 
 ## Links
 
 - Website: https://claix.dev
 - MCP documentation: https://claix.dev/documentation/mcp
+- Retrieve: https://claix.dev/documentation/call-an-agent
+- Guard: https://claix.dev/documentation/check-sql
 - Server card: https://claix.dev/.well-known/mcp/server-card.json
-- Smithery listing: https://smithery.ai/server/info-f4xz/claix
-- Official MCP Registry: https://registry.modelcontextprotocol.io
+- Smithery: https://smithery.ai/server/info-f4xz/claix
