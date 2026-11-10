@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "dev.claix/claix",
+  "title": "Claix",
+  "description": "Security layer for AI agents: Retrieve for controlled SQL reads, Guard for allow/deny writes.",
+  "websiteUrl": "https://www.claix.dev",
+  "repository": {
+    "url": "https://github.com/claix-dev/claix-mcp",
+    "source": "github",
+    "id": "1377169308"
+  },
+  "version": "1.14.1",
+  "icons": [
+    {
+      "src": "https://www.claix.dev/claix-logo.png",
+      "mimeType": "image/png",
+      "sizes": ["500x500"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://www.claix.dev/mcp",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "description": "Claix API key from https://www.claix.dev (header x-api-key)",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
